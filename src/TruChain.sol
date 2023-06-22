@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.18;
 
+import {Counters} from "openzeppelin/utils/Counters.sol";
+
 // Layout of Contract:
 // version
 // imports
@@ -23,6 +25,8 @@ pragma solidity ^0.8.18;
 // view & pure functions
 
 contract TruChain {
+    using Counters for Counters.Counter;
+
     // Type declarations
     struct Product {
         string modelNumber;
@@ -41,30 +45,30 @@ contract TruChain {
     }
 
     struct Registration {
-        uint32 productId;
-        uint32 ownerId;
+        uint256 productId;
+        uint256 ownerId;
         address productOwner;
         uint256 txTimeStamp;
     }
 
     // State variables
-    uint32 private s_productIdCounter = 0; // Product ID
-    uint32 private s_participantIdCounter = 0; // Participant ID
-    uint32 private s_registrationIdCounter = 0; // Registration ID
-    mapping(uint32 => Product) public s_products;
-    mapping(uint32 => Participant) public s_participants;
-    mapping(uint32 => Registration) public s_registrations;
-    mapping(uint32 => uint32[]) public s_productChain; // Proeuct ID => Registration IDs
+    Counters.Counter public s_productIdCounter; // Product ID
+    Counters.Counter public s_participantIdCounter; // Participant ID
+    Counters.Counter public s_registrationIdCounter; // Registration ID
+    mapping(uint256 => Product) public s_products;
+    mapping(uint256 => Participant) public s_participants;
+    mapping(uint256 => Registration) public s_registrations;
+    mapping(uint256 => uint256[]) public s_productChain; // Proeuct ID => Registration IDs
 
     // Events
     event TransferProduct(
-        uint32 indexed productId,
+        uint256 indexed productId,
         address indexed from,
         address indexed to
     );
 
     // Modifiers
-    modifier onlyProductOwner(uint32 _productId) {
+    modifier onlyProductOwner(uint256 _productId) {
         require(
             msg.sender == s_products[_productId].productOwner,
             "Only product owner can call this function."
@@ -72,7 +76,7 @@ contract TruChain {
         _;
     }
 
-    modifier onlyManufacturer(uint32 _participantId) {
+    modifier onlyManufacturer(uint256 _participantId) {
         require(
             keccak256(
                 abi.encodePacked(s_participants[_participantId].participantType)
@@ -86,13 +90,15 @@ contract TruChain {
     constructor() {}
 
     function createProduct(
-        uint32 _ownerId,
+        uint256 _ownerId,
         string memory _modelNo,
         string memory _partNo,
         string memory _serialNo,
         uint256 _cost
-    ) public onlyManufacturer(_ownerId) returns (uint32) {
-        uint32 uid = s_productIdCounter++;
+    ) public onlyManufacturer(_ownerId) returns (uint256) {
+        // Create product with new ID
+        Counters.increment(s_productIdCounter);
+        uint256 uid = Counters.current(s_productIdCounter);
         Product memory p = Product(
             _modelNo,
             _partNo,
@@ -101,6 +107,7 @@ contract TruChain {
             _cost,
             block.timestamp
         );
+        // Update state and return ID
         s_products[uid] = p;
         return uid;
     }
@@ -110,57 +117,65 @@ contract TruChain {
         address _address,
         string memory _username,
         string memory _password
-    ) public returns (uint32) {
-        uint32 uid = s_participantIdCounter++;
+    ) public returns (uint256) {
+        // Create participant with new ID
+        Counters.increment(s_participantIdCounter);
+        uint256 uid = Counters.current(s_participantIdCounter);
         Participant memory p = Participant(
             _type,
             _address,
             _username,
             _password
         );
+        // Update state and return ID
         s_participants[uid] = p;
         return uid;
     }
 
     function transferProduct(
-        uint32 _productId,
-        uint32 _participantIdFrom,
-        uint32 _participantIdTo
-    ) public onlyProductOwner(_productId) {
+        uint256 _productId,
+        uint256 _participantIdFrom,
+        uint256 _participantIdTo
+    ) public onlyProductOwner(_productId) returns (uint256) {
         (, address from, ) = getParticipant(_participantIdFrom);
         (, address to, ) = getParticipant(_participantIdTo);
-        // Create registration
-        uint32 rid = s_registrationIdCounter++;
+        // Create registration with new ID
+        Counters.increment(s_registrationIdCounter);
+        uint256 rid = Counters.current(s_registrationIdCounter);
         Registration memory r = Registration(
             _productId,
             _participantIdFrom,
             to,
             block.timestamp
         );
+        // Update state
         s_registrations[rid] = r;
         s_productChain[_productId].push(rid);
 
         // Make transfer
         s_products[_productId].productOwner = to;
         emit TransferProduct(_productId, from, to);
+
+        // Return registration ID
+        return rid;
     }
 
     // View/Pure Functions
 
     function getProduct(
-        uint32 _productId
+        uint256 _productId
     ) public view returns (Product memory) {
         return s_products[_productId];
     }
 
     function getProductChain(
-        uint32 _productId
-    ) public view returns (uint32[] memory) {
+        uint256 _productId
+    ) public view returns (uint256[] memory) {
         return s_productChain[_productId];
     }
 
     function getParticipant(
-        uint32 _participantId
+        uint256 _participantId
     ) public view returns (string memory, address, string memory) {
         Participant memory p = s_participants[_participantId];
         // Ignore the password
@@ -168,7 +183,7 @@ contract TruChain {
     }
 
     function getRegistration(
-        uint32 _rid
+        uint256 _rid
     ) public view returns (Registration memory) {
         return s_registrations[_rid];
     }

@@ -10,4 +10,10 @@ contract TestTruChain is Test {
     function setUp() public {
         tc = new TruChain();
     }
+
+    function testCounterDefaults() public {
+        assertEq(tc.s_productIdCounter(), 0);
+        assertEq(tc.s_participantIdCounter(), 0);
+        assertEq(tc.s_registrationIdCounter(), 0);
+    }
 }
